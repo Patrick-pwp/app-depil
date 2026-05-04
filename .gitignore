@@ -1,0 +1,34 @@
+# Credenciais e segredos
+.env
+credentials.json
+token.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Arquivos temporários WAT
+.tmp/
+
+# Flutter
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/pubspec.lock
+app/.env
+app/android/local.properties
+app/android/.gradle/
+app/ios/.symlinks/
+app/ios/Pods/
+app/ios/Flutter/flutter_export_environment.sh
+app/.idea/
+app/*.iml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
