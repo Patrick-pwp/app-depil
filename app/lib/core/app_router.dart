@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,20 +18,47 @@ import '../features/financial/presentation/pages/dre_page.dart';
 import '../features/public_booking/presentation/pages/public_booking_page.dart';
 import '../shared/widgets/main_scaffold.dart';
 
+// ChangeNotifier que escuta o stream de auth do Supabase e notifica o GoRouter
+class _AuthChangeNotifier extends ChangeNotifier {
+  _AuthChangeNotifier() {
+    _subscription = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      notifyListeners();
+    });
+  }
+
+  late final StreamSubscription<AuthState> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+final _authNotifierProvider = Provider<_AuthChangeNotifier>((ref) {
+  final notifier = _AuthChangeNotifier();
+  ref.onDispose(notifier.dispose);
+  return notifier;
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
+  final authNotifier = ref.watch(_authNotifierProvider);
+
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: authNotifier,  // router reage a mudanças de auth
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
       final isLoggedIn = session != null;
-      final isPublicRoute = state.matchedLocation.startsWith('/book/') ||
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/signup' ||
-          state.matchedLocation == '/forgot-password';
+      final loc = state.matchedLocation;
+
+      final isPublicRoute = loc.startsWith('/book/') ||
+          loc == '/login' ||
+          loc == '/signup' ||
+          loc == '/forgot-password';
 
       if (!isLoggedIn && !isPublicRoute) return '/login';
-      if (isLoggedIn && (state.matchedLocation == '/login' ||
-          state.matchedLocation == '/signup')) return '/';
+      if (isLoggedIn && (loc == '/login' || loc == '/signup')) return '/';
       return null;
     },
     routes: [
@@ -38,13 +67,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/signup',          builder: (c, s) => const SignupPage()),
       GoRoute(path: '/forgot-password', builder: (c, s) => const ForgotPasswordPage()),
 
-      // Página pública de agendamento (sem auth)
+      // Página pública (sem auth)
       GoRoute(
         path: '/book/:slug',
         builder: (c, s) => PublicBookingPage(slug: s.pathParameters['slug']!),
       ),
 
-      // App principal com bottom navigation
+      // App autenticado com bottom navigation
       ShellRoute(
         builder: (context, state, child) => MainScaffold(child: child),
         routes: [

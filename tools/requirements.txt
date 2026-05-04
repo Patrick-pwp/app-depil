@@ -1,0 +1,7 @@
+# Dependências dos WAT Tools
+# Instalar com: pip install -r tools/requirements.txt
+
+supabase>=2.7.0          # cliente Supabase (REST API)
+python-dotenv>=1.0.0     # carregar .env
+openpyxl>=3.1.0          # exportação Excel
+httpx>=0.27.0            # HTTP async (usado internamente pelo supabase)

@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # Backend
   supabase_flutter: ^2.5.6
@@ -20,14 +22,17 @@ dependencies:
   # Navigation
   go_router: ^14.2.7
 
+  # Configuração / env
+  flutter_dotenv: ^5.1.0
+
   # UI
   cupertino_icons: ^1.0.6
-  table_calendar: ^3.1.2    # calendário de agendamentos
-  fl_chart: ^0.68.0          # gráficos no DRE
-  shimmer: ^3.0.0            # loading skeleton
+  table_calendar: ^3.1.2
+  fl_chart: ^0.68.0
+  shimmer: ^3.0.0
 
   # Utilities
-  intl: ^0.19.0              # formatação de datas e moeda BR
+  intl: ^0.19.0
   uuid: ^4.4.2
   shared_preferences: ^2.3.2
   url_launcher: ^6.3.0
@@ -36,9 +41,6 @@ dependencies:
   # Forms
   flutter_form_builder: ^9.4.0
   form_builder_validators: ^10.0.1
-
-  # Local notifications (lembretes - futuro)
-  # flutter_local_notifications: ^17.2.2
 
 dev_dependencies:
   flutter_test:
@@ -51,5 +53,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
+    - .env
     - assets/images/

@@ -1,121 +1,58 @@
 """
-Consolida o DRE (Demonstrativo de Resultado) de um mês completo.
+Consolida o DRE de um mês completo.
 
 Uso:
     python tools/get_monthly_dre.py --user_id <uuid> --year 2026 --month 5
-
-Saída (stdout JSON):
-    {
-      "period": "2026-05",
-      "totals": {
-        "count": 47,
-        "revenue": 4230.00,
-        "cost": 846.00,
-        "profit": 3384.00,
-        "margin_pct": 80.0
-      },
-      "by_procedure": [
-        {
-          "procedure_name": "Perna inteira",
-          "count": 18,
-          "revenue": 1800.00,
-          "cost": 360.00,
-          "profit": 1440.00
-        }
-      ]
-    }
 """
 
 import argparse
 import json
-import os
 from calendar import monthrange
-from datetime import date
 
-import asyncpg
-from dotenv import load_dotenv
-
-load_dotenv()
+from supabase_client import get_admin_client
 
 
-async def get_monthly_dre(user_id: str, year: int, month: int) -> dict:
-    first_day = date(year, month, 1)
-    last_day = date(year, month, monthrange(year, month)[1])
+def get_monthly_dre(user_id: str, year: int, month: int) -> dict:
+    from datetime import date
+    first_day = date(year, month, 1).isoformat()
+    last_day = date(year, month, monthrange(year, month)[1]).isoformat()
     period = f"{year}-{month:02d}"
 
-    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
-    try:
-        totals_row = await conn.fetchrow(
-            """
-            SELECT
-                COUNT(*)        AS count,
-                SUM(revenue)    AS revenue,
-                SUM(cost)       AS cost,
-                SUM(profit)     AS profit
-            FROM financial_entries
-            WHERE user_id = $1
-              AND entry_date BETWEEN $2 AND $3
-            """,
-            user_id, first_day, last_day,
-        )
+    sb = get_admin_client()
+    rows = sb.table("financial_entries").select("revenue,cost,profit,procedure_name").eq("user_id", user_id).gte("entry_date", first_day).lte("entry_date", last_day).execute()
 
-        by_procedure_rows = await conn.fetch(
-            """
-            SELECT
-                procedure_name,
-                COUNT(*)        AS count,
-                SUM(revenue)    AS revenue,
-                SUM(cost)       AS cost,
-                SUM(profit)     AS profit
-            FROM financial_entries
-            WHERE user_id = $1
-              AND entry_date BETWEEN $2 AND $3
-            GROUP BY procedure_name
-            ORDER BY SUM(revenue) DESC
-            """,
-            user_id, first_day, last_day,
-        )
+    total_revenue = total_cost = total_profit = 0.0
+    by_procedure: dict = {}
 
-        total_revenue = float(totals_row["revenue"] or 0)
-        total_cost = float(totals_row["cost"] or 0)
-        total_profit = float(totals_row["profit"] or 0)
-        count = int(totals_row["count"] or 0)
-        margin = round((total_profit / total_revenue * 100), 1) if total_revenue > 0 else 0.0
+    for r in rows.data:
+        rev = float(r["revenue"])
+        cost = float(r["cost"])
+        profit = float(r["profit"])
+        name = r["procedure_name"]
+        total_revenue += rev
+        total_cost += cost
+        total_profit += profit
+        if name not in by_procedure:
+            by_procedure[name] = {"count": 0, "revenue": 0.0, "cost": 0.0, "profit": 0.0}
+        by_procedure[name]["count"] += 1
+        by_procedure[name]["revenue"] += rev
+        by_procedure[name]["cost"] += cost
+        by_procedure[name]["profit"] += profit
 
-        by_procedure = [
-            {
-                "procedure_name": r["procedure_name"],
-                "count": int(r["count"]),
-                "revenue": round(float(r["revenue"]), 2),
-                "cost": round(float(r["cost"]), 2),
-                "profit": round(float(r["profit"]), 2),
-            }
-            for r in by_procedure_rows
-        ]
+    margin = round(total_profit / total_revenue * 100, 1) if total_revenue > 0 else 0.0
+    sorted_procs = sorted(by_procedure.items(), key=lambda x: x[1]["revenue"], reverse=True)
 
-        return {
-            "period": period,
-            "totals": {
-                "count": count,
-                "revenue": round(total_revenue, 2),
-                "cost": round(total_cost, 2),
-                "profit": round(total_profit, 2),
-                "margin_pct": margin,
-            },
-            "by_procedure": by_procedure,
-        }
-    finally:
-        await conn.close()
+    return {
+        "period": period,
+        "totals": {"count": len(rows.data), "revenue": round(total_revenue, 2), "cost": round(total_cost, 2), "profit": round(total_profit, 2), "margin_pct": margin},
+        "by_procedure": [{"procedure_name": k, **{kk: round(vv, 2) if isinstance(vv, float) else vv for kk, vv in v.items()}} for k, v in sorted_procs],
+    }
 
 
 if __name__ == "__main__":
-    import asyncio
-
     parser = argparse.ArgumentParser(description="DRE mensal")
     parser.add_argument("--user_id", required=True)
     parser.add_argument("--year", required=True, type=int)
     parser.add_argument("--month", required=True, type=int)
     args = parser.parse_args()
-
-    result = asyncio.run(get_monthly_dre(args.user_id, args.year, args.month))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(get_monthly_dre(args.user_id, args.year, args.month), ensure_ascii=False, indent=2))
